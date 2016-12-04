@@ -1,0 +1,19 @@
+{
+  "manifest_version": 2,
+  "name": "Crap Blocker",
+  "version": "1",
+  "permissions": [
+    "<all_urls>",
+    "storage",
+    "webRequest",
+    "webRequestBlocking"
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "chrome_style": true
+  },
+  "background": {
+    "persistent": true,
+    "scripts": ["background.js"]
+  }
+}
