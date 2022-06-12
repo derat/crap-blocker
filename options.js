@@ -2,54 +2,57 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-function $(id) {
-  return document.getElementById(id);
-}
+const $ = (id) => document.getElementById(id);
 
-// (Very loosely) matches Chrome match patterns as described at
-// https://developer.chrome.com/docs/extensions/mv3/match_patterns/.
-const matchPatternRegexp = new RegExp(
-  "^" +
-    /([a-z]+|\*):\/\//.source + // scheme
-    /[-.0-9a-z*]+/.source + // host
-    /\/.*/.source // path
-);
+async function savePrefs() {
+  const domains = $('domains-textarea')
+    .value.split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .sort()
+    .join('\n');
 
-// Matches hostnames, e.g. 'example.com' or 'sub-domain.example.co.uk'.
-const hostRegexp = /^[-.0-9a-z]+$/;
+  const regexps = await $('regexps-textarea')
+    .value.split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .sort()
+    .join('\n');
 
-function saveOptions() {
-  const lines = $("patterns-textarea").value.split("\n");
-  const patterns = [];
-  for (var i = 0; i < lines.length; i++) {
-    var pattern = lines[i].trim();
-    if (!pattern) continue;
-
-    if (hostRegexp.test(pattern)) pattern = `*://*.${pattern}/*`;
-
-    if (matchPatternRegexp.test(pattern)) patterns.push(pattern);
-    else console.warn(`Skipping invalid pattern "${pattern}"`);
+  // Validate the joined regexp. This matches the logic in background.js.
+  const req = { regex: regexps.split('\n').join('|') };
+  const res = await chrome.declarativeNetRequest.isRegexSupported(req);
+  if (!res.isSupported) {
+    $('error-span').innerText = `Joined regexp unsupported: ${res.reason}`;
+    return;
   }
-  const value = patterns.sort().join("\n");
-  chrome.storage.sync.set({ patterns: value }, (items) => {
-    $("patterns-textarea").value = value;
-    $("save-button").disabled = true;
+
+  chrome.storage.sync.set({ domains, regexps }, () => {
+    $('domains-textarea').value = domains;
+    $('regexps-textarea').value = regexps;
+    $('save-button').disabled = true;
+    $('error-span').innerText = '';
   });
 }
 
-function restoreOptions() {
-  chrome.storage.sync.get("patterns", (items) => {
-    $("patterns-textarea").value = items.patterns || "";
-    $("save-button").disabled = true;
+document.addEventListener('DOMContentLoaded', () => {
+  const saveButton = $('save-button');
+  saveButton.addEventListener('click', savePrefs);
+
+  const textareaChanged = () => (saveButton.disabled = false);
+  const addListeners = (el) => {
+    el.addEventListener('change', textareaChanged);
+    el.addEventListener('keyup', textareaChanged);
+    el.addEventListener('paste', textareaChanged);
+  };
+
+  const domainsTextarea = $('domains-textarea');
+  const regexpsTextarea = $('regexps-textarea');
+  addListeners(domainsTextarea);
+  addListeners(regexpsTextarea);
+
+  chrome.storage.sync.get(['domains', 'regexps'], (items) => {
+    domainsTextarea.value = items.domains || '';
+    regexpsTextarea.value = items.regexps || '';
   });
-}
-
-function textareaChanged() {
-  $("save-button").disabled = false;
-}
-
-document.addEventListener("DOMContentLoaded", restoreOptions);
-$("save-button").addEventListener("click", saveOptions);
-$("patterns-textarea").addEventListener("change", textareaChanged);
-$("patterns-textarea").addEventListener("keyup", textareaChanged);
-$("patterns-textarea").addEventListener("paste", textareaChanged);
+});
