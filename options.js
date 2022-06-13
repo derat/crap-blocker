@@ -16,22 +16,20 @@ async function savePrefs() {
     .value.split('\n')
     .map((s) => s.trim())
     .filter(Boolean)
+    .filter(async (regex) => {
+      const req = { regex };
+      const res = await chrome.declarativeNetRequest.isRegexSupported(req);
+      if (res.isSupported) return true;
+      console.log(`Regexp "${regex}" unsupported: ${res.reason}`);
+      return false;
+    })
     .sort()
     .join('\n');
-
-  // Validate the joined regexp. This matches the logic in background.js.
-  const req = { regex: regexps.split('\n').join('|') };
-  const res = await chrome.declarativeNetRequest.isRegexSupported(req);
-  if (!res.isSupported) {
-    $('error-span').innerText = `Joined regexp unsupported: ${res.reason}`;
-    return;
-  }
 
   chrome.storage.sync.set({ domains, regexps }, () => {
     $('domains-textarea').value = domains;
     $('regexps-textarea').value = regexps;
     $('save-button').disabled = true;
-    $('error-span').innerText = '';
   });
 }
 
